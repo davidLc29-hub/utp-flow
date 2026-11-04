@@ -1,0 +1,6 @@
+{
+  "name": "UTP Flow",
+  "description": "Una app de productividad hiper-sencilla dirigida a estudiantes universitarios que trabajan a tiempo parcial.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

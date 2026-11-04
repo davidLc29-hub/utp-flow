@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UTP Flow</title>
+    <!-- Tailwind CSS (CDN) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Segoe UI"', 'system-ui', 'sans-serif']
+                    },
+                    colors: {
+                        'brand-bg': '#F7F7F5',
+                        'brand-text': '#2D2D2D',
+                        'brand-uni': '#B24444',
+                        'brand-work': '#4A5568',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { 
+            background-color: #F7F7F5; 
+            color: #2D2D2D; 
+            -webkit-tap-highlight-color: transparent; 
+        }
+        /* Ocultar scrollbar para un look más limpio en listas */
+        ::-webkit-scrollbar { display: none; }
+        * { scrollbar-width: none; }
+        
+        /* Navigation de vistas usando display */
+        .view { display: none; }
+        .view.active { display: block; }
+        
+        /* Transiciones suaves de color y fondo */
+        .color-transition { transition: background-color 0.3s, color 0.3s, border-color 0.3s; }
+        
+        /* Hover effects disable on touch devices natively through tailwind if configured, 
+           but we use active: classes as requested instead of heavy hover states. */
+    </style>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="min-h-screen font-sans selection:bg-brand-uni selection:text-white">
+    <div id="onboarding-reminders" class="fixed bottom-5 left-1/2 z-40 hidden w-[min(92vw,28rem)] -translate-x-1/2 rounded-2xl border border-[#24AD96]/20 bg-white/95 p-4 shadow-[0_18px_50px_-18px_rgba(0,0,0,0.35)] backdrop-blur">
+        <button type="button" onclick="dismissOnboardingReminders()" class="absolute right-3 top-3 rounded-full p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600" aria-label="Cerrar recordatorios">
+            <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+        <div class="flex items-start gap-3 pr-8">
+            <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#24AD96] text-white shadow-sm">
+                <i data-lucide="lightbulb" class="w-5 h-5"></i>
+            </div>
+            <div class="min-w-0 flex-1 text-sm text-gray-700">
+                <div id="onboarding-step-content" class="space-y-1">
+                    <!-- Paso activo se renderiza por JS -->
+                </div>
+                <div class="mt-4 flex items-center justify-between gap-3">
+                    <button type="button" id="onboarding-step-back" onclick="goBackOnboardingReminderStep()" class="inline-flex items-center gap-2 rounded-full border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-50">
+                        <i data-lucide="arrow-left" class="w-4 h-4"></i>
+                        Atrás
+                    </button>
+                    <span id="onboarding-step-indicator" class="text-xs font-medium text-gray-400"></span>
+                    <button type="button" id="onboarding-step-action" onclick="advanceOnboardingReminderStep()" class="inline-flex items-center gap-2 rounded-full bg-[#24AD96] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#1f9a87]">
+                        Siguiente
+                        <i data-lucide="arrow-right" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <button id="onboarding-reminders-launcher" type="button" onclick="openOnboardingReminders()" class="fixed bottom-5 left-5 z-40 hidden flex h-12 w-12 items-center justify-center rounded-full border border-[#24AD96]/20 bg-[#24AD96] text-white shadow-[0_18px_50px_-18px_rgba(0,0,0,0.35)] transition-transform hover:scale-105 active:scale-95" aria-label="Abrir miniguía">
+        <i data-lucide="lightbulb" class="w-5 h-5"></i>
+    </button>
+
+    <div id="app-toast" class="fixed top-4 left-4 right-4 z-50 hidden mx-auto max-w-3xl rounded-2xl px-4 py-3 shadow-lg border transition-all duration-300">
+        <div class="flex items-start gap-3">
+            <div id="app-toast-icon" class="mt-0.5 shrink-0"></div>
+            <p id="app-toast-message" class="text-sm font-medium leading-relaxed"></p>
+        </div>
+    </div>
+    
+    <!-- VISTA 1: PRINCIPAL -->
+    <div id="view-main" class="view active min-h-screen flex flex-col pb-24 relative">
+        <!-- HEADER (Navegación Superior Sticky) -->
+        <header class="bg-white shadow-sm sticky top-0 z-40 w-full mb-6">
+            <div class="max-w-3xl mx-auto px-6 sm:px-10 py-5 sm:py-6 flex items-center justify-between">
+                    <div class="flex items-center gap-3 text-brand-text font-bold text-2xl lg:text-3xl tracking-tight transition-colors" id="logo-container">
+                    <div class="w-10 h-10 rounded-xl flex items-center justify-center text-white" id="logo-icon-box">
+                        <img src="assets/logo.svg" alt="UTP Flow logo" class="w-8 h-8 object-contain" />
+                    </div>
+                    <span>UTP Flow</span>
+                </div>
+                <button onclick="switchView('settings')" class="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 active:scale-95 transition-all outline-none" aria-label="Ir a Configuración">
+                    <i data-lucide="settings" class="w-5 h-5"></i>
+                </button>
+            </div>
+        </header>
+
+        <main class="flex-1 max-w-3xl w-full mx-auto px-6 sm:px-10 pb-20">
+            <!-- TOGGLE DE CONTEXTO -->
+            <div class="flex justify-center mb-10">
+                <div class="bg-white p-1.5 rounded-2xl shadow-sm flex items-center border border-gray-100 w-full max-w-[380px]">
+                    <button id="tab-uni" onclick="switchContext('uni')" class="flex-1 text-center px-4 py-3 rounded-xl font-semibold text-sm transition-all text-white bg-brand-uni flex items-center justify-center gap-2 shadow-sm z-10 active:scale-95">
+                        <i data-lucide="book-open" class="w-4 h-4"></i> Universidad
+                    </button>
+                    <button id="tab-work" onclick="switchContext('work')" class="flex-1 text-center px-4 py-3 rounded-xl font-semibold text-sm transition-all text-gray-500 bg-transparent flex items-center justify-center gap-2 opacity-60 active:opacity-100 active:bg-gray-50 z-10 active:scale-95">
+                        <i data-lucide="briefcase" class="w-4 h-4"></i> Trabajo
+                    </button>
+                </div>
+            </div>
+
+            <!-- CONTENEDOR DE LA LISTA DE TAREAS -->
+            <div class="flex flex-col h-full min-h-[350px]">
+                <div class="flex items-end justify-between mb-8">
+                    <h2 class="text-2xl sm:text-3xl lg:text-4xl font-bold text-brand-text leading-tight">Pendientes de <br class="sm:hidden"><span id="list-title-context" class="text-brand-uni transition-colors">Universidad</span></h2>
+                    <p class="text-brand-text opacity-50 font-medium mb-1 shrink-0 lg:text-lg" id="task-count">0 tareas restantes</p>
+                </div>
+
+                <!-- ESTADO VACÍO (Empty State) -->
+                <div id="empty-state" class="flex flex-col items-center justify-center py-16 text-center">
+                    <div class="w-24 h-24 rounded-full bg-white shadow-sm flex items-center justify-center mb-6">
+                        <i data-lucide="check-circle-2" class="w-12 h-12 text-gray-300"></i>
+                    </div>
+                    <h3 class="font-bold text-xl lg:text-2xl mb-2 text-brand-text">Todo al día</h3>
+                    <p class="text-gray-500 max-w-[280px] lg:text-base">No tienes tareas pendientes en este entorno. Relájate o agrega una nueva tarea para organizarte.</p>
+                </div>
+
+                <!-- LISTA DE TAREAS -->
+                <div id="task-list" class="space-y-4 flex-1 hidden">
+                    <!-- Las tareas se inyectan dinámicamente aquí vía JS -->
+                </div>
+            </div>
+        </main>
+
+        <!-- BOTÓN FLOTANTE (FAB) -->
+        <button onclick="switchView('create')" id="fab-button" class="fixed bottom-6 right-6 sm:bottom-10 sm:right-10 w-16 h-16 sm:w-20 sm:h-20 rounded-full text-white flex items-center justify-center active:scale-90 hover:scale-105 transition-all color-transition z-20" aria-label="Agregar Nueva Tarea">
+            <i data-lucide="plus" stroke-width="3" class="w-8 h-8"></i>
+        </button>
+    </div>
+
+
+    <!-- VISTA 2: CREACIÓN (Nuevo Pendiente) -->
+    <div id="view-create" class="view absolute inset-0 bg-brand-bg min-h-screen z-30">
+        <div class="max-w-3xl mx-auto px-4 pt-24 pb-6">
+            <button onclick="switchView('main')" class="flex items-center gap-2 text-gray-500 font-medium active:text-gray-800 transition-colors mb-8 pl-2">
+                <i data-lucide="arrow-left" class="w-5 h-5"></i>
+                Volver
+            </button>
+
+            <div class="bg-white rounded-2xl shadow-sm p-6 sm:p-8">
+                <h1 id="create-title" class="text-2xl font-bold mb-2 text-brand-text">Nuevo pendiente</h1>
+                <p id="create-description" class="text-[14px] text-gray-500 mb-8">Se guardará automáticamente en tu entorno de <span id="create-context-label" class="font-bold color-transition text-brand-uni">Universidad</span>.</p>
+
+                <form id="create-form" onsubmit="handleCreateTask(event)">
+                    <div class="mb-6">
+                        <label for="task-title" class="block text-sm font-bold text-gray-700 mb-2">¿Qué necesitas hacer?</label>
+                        <input type="text" id="task-title" required placeholder="Ej. Entregar avance de proyecto" class="w-full border-2 border-gray-200 rounded-xl px-4 py-3.5 focus:outline-none color-transition text-brand-text bg-white" autocomplete="off">
+                    </div>
+                    
+                    <div class="mb-10">
+                        <label for="task-date" class="block text-sm font-bold text-gray-700 mb-2">¿Hasta cuándo se puede hacer? <span class="text-gray-400 font-normal">(Opcional)</span></label>
+                        <input type="date" id="task-date" class="w-full border-2 border-gray-200 rounded-xl px-4 py-3.5 focus:outline-none color-transition text-brand-text bg-white file:hidden">
+                    </div>
+
+                    <div class="mb-10">
+                        <label for="task-reminder" class="block text-sm font-bold text-gray-700 mb-2">¿Cuándo piensas hacerlo? <span class="text-gray-400 font-normal">(Opcional)</span></label>
+                        <input type="datetime-local" id="task-reminder" class="w-full border-2 border-gray-200 rounded-xl px-4 py-3.5 focus:outline-none color-transition text-brand-text bg-white file:hidden">
+                        <p class="text-[12px] text-gray-400 mt-2">Recibirás una alerta en el navegador y un sonido breve cuando llegue la hora.</p>
+                    </div>
+
+                    <div class="flex gap-3 sm:gap-4">
+                        <button type="button" onclick="cancelTaskForm()" class="flex-1 py-3.5 bg-gray-100 active:bg-gray-200 text-gray-600 font-bold rounded-xl transition-colors">Cancelar</button>
+                        <button type="submit" id="create-submit-btn" class="flex-1 py-3.5 text-white font-bold rounded-xl transition-all color-transition active:opacity-80 bg-brand-uni">Guardar Tarea</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- VISTA 3: CONFIGURACIÓN (Respaldo) -->
+    <div id="view-settings" class="view absolute inset-0 bg-brand-bg min-h-screen z-30">
+        <div class="max-w-3xl mx-auto px-4 pt-24 pb-6">
+            <button onclick="switchView('main')" class="flex items-center gap-2 text-gray-500 font-medium active:text-gray-800 transition-colors mb-8 pl-2">
+                <i data-lucide="arrow-left" class="w-5 h-5"></i>
+                Volver al inicio
+            </button>
+
+            <!-- Alerta oculta de error -->
+            <div id="import-error" class="hidden bg-red-50 border border-red-200 text-red-700 px-4 py-4 rounded-xl relative mb-6 flex items-start gap-3 shadow-sm" role="alert">
+                <i data-lucide="alert-circle" class="w-5 h-5 shrink-0 mt-0.5 text-red-500"></i>
+                <div>
+                    <strong class="font-bold block text-sm">Error al importar</strong>
+                    <span class="block text-sm mt-1" id="import-error-msg">El archivo no es válido.</span>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-2xl shadow-sm p-6 sm:p-8">
+                <h1 class="text-2xl font-bold mb-6 text-brand-text">Respaldo de Datos</h1>
+                
+                <div class="bg-[#EFF6FF] text-[#1D4ED8] p-5 rounded-xl flex items-start gap-3 mb-8">
+                    <i data-lucide="info" class="w-5 h-5 shrink-0 mt-0.5 text-blue-600"></i>
+                    <p class="text-sm leading-relaxed">
+                        <strong>Privacidad total:</strong> UTP Flow es hiper-sencilla. No requiere cuentas ni contraseñas.
+                        Tus tareas se guardan directamente en tu navegador actual usando <em>Local Storage</em>.
+                        Utiliza estas opciones para llevar tus datos a tu celular u otra PC.
+                    </p>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <button onclick="exportTasks()" class="border-2 border-dashed border-gray-300 rounded-2xl p-6 flex flex-col items-center justify-center text-center active:bg-gray-50 transition-colors">
+                        <div class="w-12 h-12 rounded-full bg-gray-50 flex items-center justify-center mb-4">
+                            <i data-lucide="cloud-download" class="w-6 h-6 text-gray-500"></i>
+                        </div>
+                        <h3 class="font-bold text-brand-text mb-1 text-base">Exportar Tareas</h3>
+                        <p class="text-[13px] text-gray-500">Descarga un archivo JSON con tu progreso.</p>
+                    </button>
+
+                    <label class="cursor-pointer border-2 border-dashed border-gray-300 rounded-2xl p-6 flex flex-col items-center justify-center text-center active:bg-gray-50 transition-colors">
+                        <div class="w-12 h-12 rounded-full bg-gray-50 flex items-center justify-center mb-4">
+                            <i data-lucide="cloud-upload" class="w-6 h-6 text-gray-500"></i>
+                        </div>
+                        <h3 class="font-bold text-brand-text mb-1 text-base">Importar Tareas</h3>
+                        <p class="text-[13px] text-gray-500">Sube tu archivo .json para restaurarlas.</p>
+                        <input type="file" accept=".json" class="hidden" onchange="importTasks(event)">
+                    </label>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN LOGIC -->
+    <script>
+        const STORAGE_KEY = 'utp_flow_tasks';
+        const REMINDER_ONBOARDING_KEY = 'utp_flow_reminder_onboarding_seen';
+        const REMINDER_ONBOARDING_STEP_KEY = 'utp_flow_reminder_onboarding_step';
+        let tasks = [];
+        let currentContext = 'uni'; // 'uni' o 'work'
+        let currentView = 'main';
+        let editingTaskId = null;
+        const alarmTimers = new Map();
+        let alarmContext = null;
+
+        const DOM = {
+            viewMain: document.getElementById('view-main'),
+            viewCreate: document.getElementById('view-create'),
+            viewSettings: document.getElementById('view-settings'),
+            tabUni: document.getElementById('tab-uni'),
+            tabWork: document.getElementById('tab-work'),
+            taskList: document.getElementById('task-list'),
+            emptyState: document.getElementById('empty-state'),
+            taskCount: document.getElementById('task-count'),
+            logoContainer: document.getElementById('logo-container'),
+            logoIconBox: document.getElementById('logo-icon-box'),
+            listTitleContext: document.getElementById('list-title-context'),
+            fabButton: document.getElementById('fab-button'),
+            createTitle: document.getElementById('create-title'),
+            createDescription: document.getElementById('create-description'),
+            createContextLabel: document.getElementById('create-context-label'),
+            taskTitleInput: document.getElementById('task-title'),
+            taskDateInput: document.getElementById('task-date'),
+            taskReminderInput: document.getElementById('task-reminder'),
+            createSubmitBtn: document.getElementById('create-submit-btn'),
+            importError: document.getElementById('import-error'),
+            importErrorMsg: document.getElementById('import-error-msg'),
+            onboardingReminders: document.getElementById('onboarding-reminders'),
+            onboardingRemindersLauncher: document.getElementById('onboarding-reminders-launcher'),
+            onboardingStepContent: document.getElementById('onboarding-step-content'),
+            onboardingStepIndicator: document.getElementById('onboarding-step-indicator'),
+            onboardingStepBack: document.getElementById('onboarding-step-back'),
+            onboardingStepAction: document.getElementById('onboarding-step-action'),
+            appToast: document.getElementById('app-toast'),
+            appToastMessage: document.getElementById('app-toast-message'),
+            appToastIcon: document.getElementById('app-toast-icon')
+        };
+
+        const onboardingReminderSteps = [
+            {
+                title: '1: Añade una tarea',
+                message: '¡Sabemos que hacer!',
+                action: 'Siguiente'
+            },
+            {
+                title: '2: Añade una fecha límite',
+                message: 'Que no se te escape, colega',
+                action: 'Siguiente'
+            },
+            {
+                title: '3: Añade cuándo la harás',
+                message: 'Metas fijas, sueños claros',
+                action: 'Cerrar'
+            }
+        ];
+
+        let toastTimer = null;
+
+        // Inicializar iconos
+        lucide.createIcons();
+
+        function init() {
+            // Cargar tareas
+            const saved = localStorage.getItem(STORAGE_KEY);
+            if (saved) {
+                try {
+                    tasks = JSON.parse(saved);
+                } catch (e) {
+                    tasks = [];
+                }
+            }
+            applyContextTheme();
+            renderTasks();
+            
+            // Setting minimum date in date picker
+            const today = new Date().toISOString().split('T')[0];
+            DOM.taskDateInput.min = today;
+            if (DOM.taskReminderInput) DOM.taskReminderInput.min = getLocalDateTimeInputValue(new Date());
+
+            showOnboardingRemindersIfNeeded();
+            syncTaskReminders();
+        }
+
+        function saveTasks() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+        }
+
+        function switchContext(context) {
+            currentContext = context;
+            applyContextTheme();
+            renderTasks();
+        }
+
+        function applyContextTheme() {
+            const isUni = currentContext === 'uni';
+            
+            // Actualizar Toggle Tabs
+            DOM.tabUni.className = isUni 
+                ? 'flex-1 text-center px-4 py-3 rounded-xl font-semibold text-sm transition-all text-white bg-brand-uni flex items-center justify-center gap-2 shadow-sm z-10 active:scale-95' 
+                : 'flex-1 text-center px-4 py-3 rounded-xl font-semibold text-sm transition-all text-gray-500 bg-transparent flex items-center justify-center gap-2 opacity-60 active:opacity-100 active:bg-gray-50 z-10 active:scale-95';
+            
+            DOM.tabWork.className = !isUni 
+                ? 'flex-1 text-center px-4 py-3 rounded-xl font-semibold text-sm transition-all text-white bg-brand-work flex items-center justify-center gap-2 shadow-sm z-10 active:scale-95' 
+                : 'flex-1 text-center px-4 py-3 rounded-xl font-semibold text-sm transition-all text-gray-500 bg-transparent flex items-center justify-center gap-2 opacity-60 active:opacity-100 active:bg-gray-50 z-10 active:scale-95';
+
+            // Logo Color superior box
+            if(DOM.logoIconBox) DOM.logoIconBox.className = `w-10 h-10 rounded-xl flex items-center justify-center text-white color-transition ${isUni ? 'bg-brand-uni' : 'bg-brand-work'}`;
+            if(DOM.listTitleContext) DOM.listTitleContext.textContent = isUni ? 'Universidad' : 'Trabajo';
+            if(DOM.listTitleContext) DOM.listTitleContext.className = `transition-colors ${isUni ? 'text-brand-uni' : 'text-brand-work'}`;
+            
+            // FAB Botón Nuevo
+            const fabShadow = isUni ? 'shadow-[0_15px_40px_-10px_rgba(178,68,68,0.5)]' : 'shadow-[0_15px_40px_-10px_rgba(74,85,104,0.5)]';
+            DOM.fabButton.className = `fixed bottom-6 right-6 sm:bottom-10 sm:right-10 w-16 h-16 sm:w-20 sm:h-20 rounded-full text-white flex items-center justify-center active:scale-90 transition-all color-transition z-20 hover:scale-105 ${fabShadow} ${isUni ? 'bg-brand-uni' : 'bg-brand-work'}`;
+
+            // Etiqueta Vista Crear
+            DOM.createContextLabel.textContent = isUni ? 'Universidad' : 'Trabajo';
+            DOM.createContextLabel.className = `font-bold color-transition ${isUni ? 'text-brand-uni' : 'text-brand-work'}`;
+
+            // Botón Submit Crear
+            DOM.createSubmitBtn.className = `flex-1 py-3.5 text-white font-bold rounded-xl transition-all color-transition active:opacity-80 ${isUni ? 'bg-brand-uni' : 'bg-brand-work'}`;
+            
+            // Bordes Focus de los inputs
+            DOM.taskTitleInput.className = `w-full border-2 border-gray-200 rounded-xl px-4 py-3.5 focus:outline-none color-transition text-brand-text bg-white ${isUni ? 'focus:border-brand-uni' : 'focus:border-brand-work'}`;
+            DOM.taskDateInput.className = `w-full border-2 border-gray-200 rounded-xl px-4 py-3.5 focus:outline-none color-transition text-brand-text bg-white file:hidden ${isUni ? 'focus:border-brand-uni' : 'focus:border-brand-work'}`;
+        }
+
+        function switchView(view) {
+            currentView = view;
+            DOM.viewMain.classList.remove('active');
+            DOM.viewCreate.classList.remove('active');
+            DOM.viewSettings.classList.remove('active');
+
+            if (view === 'main') {
+                DOM.viewMain.classList.add('active');
+                renderTasks();
+            } else if (view === 'create') {
+                DOM.viewCreate.classList.add('active');
+                if (editingTaskId) {
+                    updateCreateFormForEdit();
+                } else {
+                    updateCreateFormForCreate();
+                }
+                setTimeout(() => DOM.taskTitleInput.focus(), 50);
+            } else if (view === 'settings') {
+                DOM.viewSettings.classList.add('active');
+                hideImportError();
+            }
+        }
+
+        function updateCreateFormForCreate() {
+            if (DOM.createTitle) DOM.createTitle.textContent = 'Nuevo pendiente';
+            DOM.taskTitleInput.value = '';
+            DOM.taskDateInput.value = '';
+            DOM.taskReminderInput.value = '';
+            DOM.createSubmitBtn.textContent = 'Guardar Tarea';
+        }
+
+        function updateCreateFormForEdit() {
+            const task = tasks.find(t => t.id === editingTaskId);
+            if (!task) {
+                editingTaskId = null;
+                updateCreateFormForCreate();
+                return;
+            }
+
+            if (DOM.createTitle) DOM.createTitle.textContent = 'Editar pendiente';
+            DOM.taskTitleInput.value = task.title;
+            DOM.taskDateInput.value = task.date || '';
+            DOM.taskReminderInput.value = task.reminderAt || '';
+            DOM.createSubmitBtn.textContent = 'Guardar Cambios';
+        }
+
+        function cancelTaskForm() {
+            editingTaskId = null;
+            updateCreateFormForCreate();
+            switchView('main');
+        }
+
+        function openTaskEditor(id) {
+            const task = tasks.find(t => t.id === id && t.context === currentContext);
+            if (!task) return;
+
+            editingTaskId = id;
+            switchView('create');
+        }
+
+        function renderTasks() {
+            const contextTasks = tasks.filter(t => t.context === currentContext);
+            const pendingCount = contextTasks.filter(t => !t.completed).length;
+            DOM.taskCount.textContent = `${pendingCount} tarea(s) restante(s)`;
+            
+            if (contextTasks.length === 0) {
+                DOM.emptyState.classList.remove('hidden');
+                DOM.taskList.classList.add('hidden');
+                DOM.taskList.innerHTML = '';
+            } else {
+                DOM.emptyState.classList.add('hidden');
+                DOM.taskList.classList.remove('hidden');
+                
+                // Ordenar: Primero Pendientes, luego Completadas. Por orden de creación natural (ascendente).
+                contextTasks.sort((a, b) => {
+                    if (a.completed === b.completed) return 0;
+                    return a.completed ? 1 : -1;
+                });
+
+                const isUni = currentContext === 'uni';
+                const accentHex = isUni ? '#B24444' : '#4A5568';
+                
+                DOM.taskList.innerHTML = contextTasks.map(task => `
+                    <div class="bg-white p-5 sm:p-6 rounded-2xl shadow-sm transition-all flex items-center justify-between group border-l-8 ${task.completed ? 'opacity-60 border-transparent' : (isUni ? 'border-brand-uni' : 'border-brand-work')}">
+                        <div class="flex items-center gap-4 sm:gap-5 w-full">
+                            <label class="relative flex items-center cursor-pointer shrink-0">
+                                <input type="checkbox" class="sr-only peer" ${task.completed ? 'checked' : ''} onchange="toggleTask('${task.id}')">
+                                <div class="w-7 h-7 border-2 rounded-lg transition-colors flex items-center justify-center bg-gray-50
+                                    ${task.completed ? 'border-transparent' : 'border-gray-200 peer-active:border-gray-300'}" 
+                                    style="${task.completed ? 'background-color: ' + accentHex + ';' : ''}">
+                                    <i data-lucide="check" stroke-width="3" class="w-4 h-4 text-white ${task.completed ? 'block' : 'hidden'}"></i>
+                                </div>
+                            </label>
+                            <div class="flex-1 min-w-0 pr-2">
+                                <h3 class="text-lg sm:text-xl lg:text-2xl font-semibold leading-tight break-words ${task.completed ? 'line-through text-gray-500 decoration-gray-400' : 'text-brand-text'}">${escapeHTML(task.title)}</h3>
+                                ${ (task.date || task.reminderAt) ? `
+                                    <div class="flex flex-wrap items-center gap-2 mt-1">
+                                        ${ task.date ? `<span class="inline-flex items-center gap-2 px-2 py-1 rounded-full text-xs font-medium ${task.completed ? 'bg-gray-100 text-gray-400' : (isUni ? 'bg-brand-uni/10 text-brand-uni' : 'bg-brand-work/10 text-brand-work')}"><i data-lucide="calendar" class="w-4 h-4"></i> <span class="whitespace-nowrap">Hasta ${formatDate(task.date)}</span></span>` : '' }
+                                    </div>
+                                ` : '' }
+                            </div>
+                        </div>
+                        ${ task.reminderAt ? `<div class="ml-3 shrink-0 flex items-center">
+                                        <div role="img" aria-label="Alarma programada" class="flex items-center justify-center w-16 sm:w-20 h-10 sm:h-12 rounded-lg text-white text-sm font-semibold" style="background-color: #24AD96">${escapeHTML(formatReminderSquareText(task.reminderAt))}</div>
+                                    </div>` : '' }
+                        <div class="flex items-center gap-2 sm:gap-3 shrink-0">
+                            <button onclick="openTaskEditor('${task.id}')" class="p-2 sm:p-3 text-gray-300 hover:text-brand-text hover:bg-gray-50 sm:opacity-0 group-hover:opacity-100 transition-all shrink-0 rounded-xl hover:shadow-sm" aria-label="Editar Tarea">
+                                <i data-lucide="pencil" class="w-5 h-5"></i>
+                            </button>
+                            <button onclick="deleteTask('${task.id}')" class="p-2 sm:p-3 text-gray-300 hover:text-red-500 hover:bg-red-50 sm:opacity-0 group-hover:opacity-100 transition-all shrink-0 rounded-xl hover:shadow-sm" aria-label="Eliminar Tarea">
+                                <i data-lucide="trash-2" class="w-5 h-5"></i>
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
+                
+                // Refrescar iconos inyectados
+                lucide.createIcons();
+            }
+        }
+
+        function handleCreateTask(e) {
+            e.preventDefault();
+            const title = DOM.taskTitleInput.value.trim();
+            const date = DOM.taskDateInput.value;
+            const reminderAt = DOM.taskReminderInput.value;
+            
+            if (!title) return;
+
+            if (reminderAt) {
+                const reminderTime = new Date(reminderAt).getTime();
+                if (Number.isNaN(reminderTime) || reminderTime <= Date.now()) {
+                    showAppToast('La alarma debe estar programada para un momento futuro.', 'error');
+                    return;
+                }
+            }
+
+            requestNotificationPermissionIfNeeded();
+
+            if (editingTaskId) {
+                const task = tasks.find(t => t.id === editingTaskId);
+                if (!task) {
+                    editingTaskId = null;
+                    return;
+                }
+
+                task.title = title;
+                task.date = date;
+                task.reminderAt = reminderAt;
+                if (!reminderAt) {
+                    task.reminderFiredAt = null;
+                }
+                task.context = currentContext;
+                saveTasks();
+                editingTaskId = null;
+                syncTaskReminders();
+                switchView('main');
+                return;
+            }
+
+            const newTask = {
+                id: 'task_' + Date.now() + Math.random().toString(36).substring(2, 9),
+                title,
+                date,
+                reminderAt,
+                reminderFiredAt: null,
+                context: currentContext,
+                completed: false,
+                createdAt: Date.now()
+            };
+
+            tasks.push(newTask);
+            saveTasks();
+            syncTaskReminders();
+            switchView('main');
+        }
+
+        function toggleTask(id) {
+            const task = tasks.find(t => t.id === id);
+            if (task) {
+                task.completed = !task.completed;
+                saveTasks();
+                syncTaskReminders();
+                renderTasks();
+            }
+        }
+
+        function deleteTask(id) {
+            // Animación visual de eliminación sutil (opcional en JS vanilla para que sea inmediato)
+            tasks = tasks.filter(t => t.id !== id);
+            if (editingTaskId === id) {
+                editingTaskId = null;
+            }
+            saveTasks();
+            syncTaskReminders();
+            renderTasks();
+        }
+
+        function exportTasks() {
+            if (tasks.length === 0) {
+                showAppToast('No puedes exportar un archivo porque todavía no tienes ninguna tarea.', 'error');
+                return;
+            }
+
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(tasks, null, 2));
+            const downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href", dataStr);
+            downloadAnchorNode.setAttribute("download", "MisTareas_UTPFlow.json");
+            document.body.appendChild(downloadAnchorNode);
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+            showAppToast('El archivo se descargó correctamente.', 'success');
+        }
+
+        function importTasks(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const fileName = (file.name || '').toLowerCase();
+            const isMobileDevice = /android|iphone|ipad|ipod/i.test(navigator.userAgent);
+            const hasJsonExtension = fileName.endsWith('.json');
+
+            if (!isMobileDevice && !hasJsonExtension) {
+                showImportError("Por favor, selecciona un archivo .json válido.");
+                event.target.value = ''; 
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const rawText = String(e.target.result || '');
+                    if (!rawText.trim()) {
+                        throw new Error("El archivo está vacío o no se pudo leer correctamente.");
+                    }
+
+                    const importedTasks = JSON.parse(rawText);
+                    if (!Array.isArray(importedTasks)) {
+                        throw new Error("El formato del archivo no es un array válido de tareas.");
+                    }
+                    
+                    // Validar estructura básica
+                    const isValid = importedTasks.every(t => t.id && t.title && typeof t.completed === 'boolean');
+                    if (!isValid) {
+                         throw new Error("El archivo JSON contiene datos corruptos o incompatibles.");
+                    }
+
+                    tasks = importedTasks;
+                    tasks = tasks.map(task => ({
+                        ...task,
+                        reminderAt: task.reminderAt || '',
+                        reminderFiredAt: task.reminderFiredAt || null
+                    }));
+                    saveTasks();
+                    event.target.value = ''; 
+                    syncTaskReminders();
+                    showAppToast('Las tareas se importaron correctamente.', 'success');
+                    switchView('main');
+                } catch (error) {
+                    showImportError(error.message || "No se pudo leer el archivo JSON.");
+                    event.target.value = ''; 
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function showImportError(msg) {
+            DOM.importErrorMsg.textContent = msg;
+            DOM.importError.classList.remove('hidden');
+            
+            // Ocultar alerta a los 4 segundos
+            setTimeout(() => {
+                hideImportError();
+            }, 4000);
+        }
+
+        function hideImportError() {
+            DOM.importError.classList.add('hidden');
+        }
+
+        function showOnboardingRemindersIfNeeded() {
+            if (!DOM.onboardingReminders) return;
+            const seen = localStorage.getItem(REMINDER_ONBOARDING_KEY) === '1';
+            if (DOM.onboardingRemindersLauncher) {
+                DOM.onboardingRemindersLauncher.classList.toggle('hidden', !seen);
+            }
+            if (seen) return;
+
+            DOM.onboardingReminders.classList.remove('hidden');
+            if (DOM.onboardingRemindersLauncher) {
+                DOM.onboardingRemindersLauncher.classList.add('hidden');
+            }
+            renderOnboardingReminderStep();
+            lucide.createIcons();
+        }
+
+        function dismissOnboardingReminders() {
+            if (DOM.onboardingReminders) {
+                DOM.onboardingReminders.classList.add('hidden');
+            }
+            if (DOM.onboardingRemindersLauncher) {
+                DOM.onboardingRemindersLauncher.classList.remove('hidden');
+            }
+            localStorage.setItem(REMINDER_ONBOARDING_KEY, '1');
+            localStorage.removeItem(REMINDER_ONBOARDING_STEP_KEY);
+        }
+
+        function openOnboardingReminders() {
+            if (!DOM.onboardingReminders) return;
+            DOM.onboardingReminders.classList.remove('hidden');
+            if (DOM.onboardingRemindersLauncher) {
+                DOM.onboardingRemindersLauncher.classList.add('hidden');
+            }
+            renderOnboardingReminderStep();
+            lucide.createIcons();
+        }
+
+        function renderOnboardingReminderStep() {
+            if (!DOM.onboardingStepContent || !DOM.onboardingStepIndicator || !DOM.onboardingStepAction || !DOM.onboardingStepBack) return;
+
+            const storedStep = Number(localStorage.getItem(REMINDER_ONBOARDING_STEP_KEY));
+            const stepIndex = Number.isFinite(storedStep) && storedStep >= 0 ? Math.min(storedStep, onboardingReminderSteps.length - 1) : 0;
+            const step = onboardingReminderSteps[stepIndex];
+
+            DOM.onboardingStepContent.innerHTML = `
+                <p class="leading-relaxed"><strong class="font-semibold text-brand-text">${step.title}</strong><br>${step.message}</p>
+            `;
+            DOM.onboardingStepIndicator.textContent = `${stepIndex + 1} / ${onboardingReminderSteps.length}`;
+            DOM.onboardingStepAction.textContent = step.action;
+            DOM.onboardingStepAction.innerHTML = stepIndex === onboardingReminderSteps.length - 1
+                ? 'Cerrar <i data-lucide="arrow-right" class="w-4 h-4"></i>'
+                : 'Siguiente <i data-lucide="arrow-right" class="w-4 h-4"></i>';
+            DOM.onboardingStepBack.disabled = stepIndex === 0;
+            DOM.onboardingStepBack.classList.toggle('opacity-40', stepIndex === 0);
+            DOM.onboardingStepBack.classList.toggle('pointer-events-none', stepIndex === 0);
+            lucide.createIcons();
+        }
+
+        function goBackOnboardingReminderStep() {
+            const storedStep = Number(localStorage.getItem(REMINDER_ONBOARDING_STEP_KEY));
+            const stepIndex = Number.isFinite(storedStep) && storedStep >= 0 ? Math.min(storedStep, onboardingReminderSteps.length - 1) : 0;
+
+            if (stepIndex <= 0) return;
+
+            localStorage.setItem(REMINDER_ONBOARDING_STEP_KEY, String(stepIndex - 1));
+            renderOnboardingReminderStep();
+        }
+
+        function advanceOnboardingReminderStep() {
+            const storedStep = Number(localStorage.getItem(REMINDER_ONBOARDING_STEP_KEY));
+            const stepIndex = Number.isFinite(storedStep) && storedStep >= 0 ? Math.min(storedStep, onboardingReminderSteps.length - 1) : 0;
+
+            if (stepIndex >= onboardingReminderSteps.length - 1) {
+                dismissOnboardingReminders();
+                return;
+            }
+
+            localStorage.setItem(REMINDER_ONBOARDING_STEP_KEY, String(stepIndex + 1));
+            renderOnboardingReminderStep();
+        }
+
+        function syncTaskReminders() {
+            alarmTimers.forEach((timeoutId) => clearTimeout(timeoutId));
+            alarmTimers.clear();
+
+            tasks.forEach(task => {
+                if (!task || task.completed || !task.reminderAt || task.reminderFiredAt) return;
+
+                const reminderTime = new Date(task.reminderAt).getTime();
+                if (Number.isNaN(reminderTime)) return;
+
+                const delay = reminderTime - Date.now();
+                if (delay <= 0) {
+                    fireTaskReminder(task.id);
+                } else {
+                    const timeoutId = setTimeout(() => fireTaskReminder(task.id), delay);
+                    alarmTimers.set(task.id, timeoutId);
+                }
+            });
+        }
+
+        function fireTaskReminder(taskId) {
+            const task = tasks.find(t => t.id === taskId);
+            if (!task || task.completed || !task.reminderAt || task.reminderFiredAt) return;
+
+            task.reminderFiredAt = new Date().toISOString();
+            saveTasks();
+            renderTasks();
+
+            const reminderText = `Recordatorio: ${task.title}`;
+            showAppToast(reminderText, 'error');
+            playAlarmSound();
+            showBrowserNotification(task);
+            syncTaskReminders();
+        }
+
+        function requestNotificationPermissionIfNeeded() {
+            if (!('Notification' in window)) return;
+            if (Notification.permission === 'default') {
+                Notification.requestPermission().catch(() => {});
+            }
+        }
+
+        function showBrowserNotification(task) {
+            if (!('Notification' in window) || Notification.permission !== 'granted') return;
+
+            const notification = new Notification('UTP Flow', {
+                body: `${task.title}${task.date ? ` · vence ${formatDate(task.date)}` : ''}`,
+                icon: 'assets/logo.svg'
+            });
+
+            notification.onclick = () => {
+                window.focus();
+                notification.close();
+            };
+        }
+
+        function playAlarmSound() {
+            try {
+                const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                if (!AudioContextClass) return;
+
+                const audioContext = new AudioContextClass();
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+
+                oscillator.type = 'sine';
+                oscillator.frequency.value = 880;
+                gainNode.gain.value = 0.0001;
+
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                oscillator.start();
+
+                const now = audioContext.currentTime;
+                gainNode.gain.exponentialRampToValueAtTime(0.2, now + 0.02);
+                gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.8);
+                oscillator.stop(now + 0.85);
+
+                oscillator.onended = () => audioContext.close().catch(() => {});
+            } catch (error) {
+                // Silencioso: el recordatorio visual sigue funcionando si el audio falla.
+            }
+        }
+
+        function showAppToast(message, type = 'info') {
+            if (!DOM.appToast || !DOM.appToastMessage || !DOM.appToastIcon) return;
+
+            const variants = {
+                success: {
+                    wrapper: 'border-emerald-200 bg-emerald-50 text-emerald-900',
+                    icon: '<i data-lucide="check-circle-2" class="w-5 h-5 text-emerald-600"></i>'
+                },
+                error: {
+                    wrapper: 'border-rose-200 bg-rose-50 text-rose-900',
+                    icon: '<i data-lucide="alert-circle" class="w-5 h-5 text-rose-600"></i>'
+                },
+                info: {
+                    wrapper: 'border-slate-200 bg-white text-slate-900',
+                    icon: '<i data-lucide="info" class="w-5 h-5 text-slate-600"></i>'
+                }
+            };
+
+            const variant = variants[type] || variants.info;
+
+            DOM.appToast.className = `fixed top-4 left-4 right-4 z-50 mx-auto max-w-3xl rounded-2xl px-4 py-3 shadow-lg border transition-all duration-300 ${variant.wrapper}`;
+            DOM.appToastMessage.textContent = message;
+            DOM.appToastIcon.innerHTML = variant.icon;
+            DOM.appToast.classList.remove('hidden');
+            DOM.appToast.classList.add('opacity-100', 'translate-y-0');
+
+            lucide.createIcons();
+
+            if (toastTimer) {
+                clearTimeout(toastTimer);
+            }
+
+            toastTimer = setTimeout(() => {
+                DOM.appToast.classList.add('hidden');
+            }, 3000);
+        }
+
+        function escapeHTML(str) {
+            // Protección XSS básica
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return '';
+            const [year, month, day] = dateStr.split('-');
+            return `${day}/${month}/${year}`;
+        }
+
+        function formatReminderDateTime(dateTimeStr) {
+            if (!dateTimeStr) return '';
+            const date = new Date(dateTimeStr);
+            if (Number.isNaN(date.getTime())) return '';
+
+            return new Intl.DateTimeFormat('es-ES', {
+                day: '2-digit',
+                month: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+            }).format(date);
+        }
+
+        function getRelativeTime(dateTimeStr) {
+            if (!dateTimeStr) return '';
+            const t = new Date(dateTimeStr).getTime();
+            if (Number.isNaN(t)) return '';
+            const now = Date.now();
+            const diff = t - now; // positive => future
+
+            const abs = Math.abs(diff);
+            const minute = 60 * 1000;
+            const hour = 60 * minute;
+            const day = 24 * hour;
+
+            if (abs < 30 * 1000) return diff >= 0 ? 'en unos segundos' : 'hace unos segundos';
+            if (abs < minute) return diff >= 0 ? `en ${Math.ceil(abs/1000)}s` : `hace ${Math.ceil(abs/1000)}s`;
+            if (abs < hour) return diff >= 0 ? `en ${Math.ceil(abs/minute)} min` : `hace ${Math.ceil(abs/minute)} min`;
+            if (abs < day) return diff >= 0 ? `en ${Math.ceil(abs/hour)} h` : `hace ${Math.ceil(abs/hour)} h`;
+            return diff >= 0 ? `en ${Math.ceil(abs/day)} d` : `hace ${Math.ceil(abs/day)} d`;
+        }
+
+        function formatReminderSquareText(dateTimeStr) {
+            if (!dateTimeStr) return '';
+            const d = new Date(dateTimeStr);
+            if (Number.isNaN(d.getTime())) return '';
+            const weekday = new Intl.DateTimeFormat('es-ES', { weekday: 'short' }).format(d).replace('.', '');
+            const time = d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+            return `${weekday} ${time}`;
+        }
+
+        function getLocalDateTimeInputValue(date) {
+            const offset = date.getTimezoneOffset();
+            const localDate = new Date(date.getTime() - offset * 60000);
+            return localDate.toISOString().slice(0, 16);
+        }
+
+        // Ejecutar inicialización
+        init();
+    </script>
+</body>
+</html>
