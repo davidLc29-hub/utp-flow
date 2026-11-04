@@ -70,6 +70,7 @@ function AppContent() {
         <Dashboard
           ambitTasks={ambitTasks}
           pendingCount={pendingCount}
+          horarios={horarios}
           onCreateTask={createTask}
           onUpdateTask={updateTask}
           onToggleTask={toggleTaskCompletion}

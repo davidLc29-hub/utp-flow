@@ -1,20 +1,22 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { CheckCircle2, Plus, ArrowLeft, Star } from 'lucide-react';
+import { CheckCircle2, Plus, ArrowLeft, Star, Sparkles } from 'lucide-react';
 import { useAmbit } from '../context/AmbitContext';
 import { AmbitTabs } from '../components/AmbitTabs';
 import { TaskCard } from '../components/TaskCard';
 import { Button } from '../components/Button';
 import { ConflictModal } from '../components/ConflictModal';
+import { TaskAiUploader } from '../components/TaskAiUploader';
 import { getLocalDateTimeInputValue, getTodayDateInputValue } from '../utils/formatDate';
 import { validateFutureReminder } from '../services/timeValidationService';
 
 /**
- * Vista principal del Dashboard con barra de ámbitos deslizables, prioridad de 1 clic (`urgente`)
- * y resolución interactiva de conflictos de horario (Sprint 2).
+ * Vista principal del Dashboard con barra de ámbitos deslizables, escáner de tareas por IA
+ * (`TaskAiUploader`), prioridad de 1 clic (`urgente`) y resolución de conflictos (Sprint 2).
  */
 export function Dashboard({
   ambitTasks,
   pendingCount,
+  horarios = [],
   onCreateTask,
   onUpdateTask,
   onToggleTask,
@@ -24,6 +26,7 @@ export function Dashboard({
   const { currentAmbit, currentTheme, showToast } = useAmbit();
 
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState(null);
   const [titulo, setTitulo] = useState('');
   const [fechaProgramada, setFechaProgramada] = useState('');
@@ -115,8 +118,6 @@ export function Dashboard({
     await executeSave(false);
   };
 
-  // Botón Primario del ConflictModal ("Modificar la hora"):
-  // Cierra el modal y devuelve el foco (focus()) al input de fecha/hora del formulario
   const handleModifyTimeFromModal = () => {
     setPendingConflict(null);
     setTimeout(() => {
@@ -126,8 +127,6 @@ export function Dashboard({
     }, 50);
   };
 
-  // Botón Secundario del ConflictModal ("Forzar Guardado como Excepción"):
-  // Guarda la tarea marcando `forzado_con_cruce: true` y cierra el formulario
   const handleForceSaveException = async () => {
     setPendingConflict(null);
     await executeSave(true);
@@ -187,16 +186,18 @@ export function Dashboard({
                     type="button"
                     onClick={() => setUrgente((prev) => !prev)}
                     aria-pressed={urgente}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 border ${urgente
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 border ${
+                      urgente
                         ? 'bg-amber-100 text-amber-800 border-amber-400 shadow-xs'
                         : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
-                      }`}
+                    }`}
                   >
                     <Star
-                      className={`w-3.5 h-3.5 ${urgente ? 'fill-amber-500 text-amber-600' : 'text-gray-400'
-                        }`}
+                      className={`w-3.5 h-3.5 ${
+                        urgente ? 'fill-amber-500 text-amber-600' : 'text-gray-400'
+                      }`}
                     />
-                    <span>Marcar como urgente</span>
+                    <span>⭐ Marcar como urgente</span>
                   </button>
                 </div>
 
@@ -276,23 +277,59 @@ export function Dashboard({
         <AmbitTabs />
 
         <div className="flex flex-col h-full min-h-[350px]">
-          <div className="flex items-end justify-between mb-8">
-            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-brand-text leading-tight">
-              Pendientes de <br className="sm:hidden" />
-              <span
-                id="list-title-context"
-                className={`transition-colors ${currentTheme.textPrimary}`}
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-6">
+            <div>
+              <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-brand-text leading-tight">
+                Pendientes de <br className="sm:hidden" />
+                <span
+                  id="list-title-context"
+                  className={`transition-colors ${currentTheme.textPrimary}`}
+                >
+                  {currentAmbit.nombre}
+                </span>
+              </h2>
+              <p
+                className="text-brand-text opacity-50 font-medium mt-1 shrink-0 text-sm sm:text-base"
+                id="task-count"
               >
-                {currentAmbit.nombre}
-              </span>
-            </h2>
-            <p
-              className="text-brand-text opacity-50 font-medium mb-1 shrink-0 lg:text-lg"
-              id="task-count"
-            >
-              {pendingCount} tarea(s) restante(s)
-            </p>
+                {pendingCount} tarea(s) restante(s)
+              </p>
+            </div>
+
+            {/* Acciones Superiores: Botón secundario "Escanear Tareas" junto a "Nueva Tarea" */}
+            <div className="flex items-center gap-2.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsScannerOpen((prev) => !prev)}
+                aria-expanded={isScannerOpen}
+                className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm border transition-all active:scale-95 ${
+                  isScannerOpen
+                    ? 'bg-violet-600 text-white border-violet-600 shadow-xs'
+                    : 'bg-violet-50 hover:bg-violet-100 text-violet-700 border-violet-200'
+                }`}
+              >
+                <Sparkles className="w-4 h-4 shrink-0" />
+                <span>Escanear Tareas</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleOpenCreate}
+                className={`inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm text-white transition-all active:scale-95 shadow-xs ${currentTheme.bgPrimary} ${currentTheme.bgHover}`}
+              >
+                <Plus className="w-4 h-4 shrink-0" />
+                <span>Nueva Tarea</span>
+              </button>
+            </div>
           </div>
+
+          {/* Contenedor desplegable de Subida Inteligente de Tareas con IA */}
+          {isScannerOpen && (
+            <TaskAiUploader
+              horarios={horarios}
+              onCloseUploader={() => setIsScannerOpen(false)}
+            />
+          )}
 
           {ambitTasks.length === 0 ? (
             <div
@@ -304,8 +341,8 @@ export function Dashboard({
               </div>
               <h3 className="font-bold text-xl lg:text-2xl mb-2 text-brand-text">Todo al día</h3>
               <p className="text-gray-500 max-w-[280px] lg:text-base">
-                No tienes tareas pendientes en este entorno. Relájate o agrega una nueva tarea para
-                organizarte.
+                No tienes tareas pendientes en este entorno. Relájate, agrega una nueva tarea o
+                escanea una captura con IA.
               </p>
             </div>
           ) : (

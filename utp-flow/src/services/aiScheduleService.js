@@ -7,6 +7,9 @@ const FALLBACK_VISION_MODELS = [
   'gemini-2.5-pro',
 ];
 
+let cachedDiscoveredModels = null;
+let lastWorkingModel = null;
+
 /**
  * Limpia espacios o comillas envolventes de la clave API.
  */
@@ -17,23 +20,63 @@ export function normalizeApiKey(rawKey = '') {
 }
 
 /**
- * Convierte un objeto File en su representación Base64 pura (sin prefijo data:...).
+ * Redimensiona la imagen en un <canvas> en memoria a un máximo de 1280px con calidad JPEG 0.8
+ * para agilizar la transferencia y análisis con Gemini Vision.
  */
-export function fileToBase64(file) {
+export function compressImageToBase64(file, maxDimension = 1280, quality = 0.8) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
-      const result = String(reader.result || '');
-      const base64 = result.includes(',') ? result.split(',')[1] : result;
-      resolve({
-        base64Image: base64,
-        mimeType: file.type || 'image/png',
-      });
+      const dataUrl = String(reader.result || '');
+      const img = new Image();
+      img.onload = () => {
+        try {
+          let { width, height } = img;
+          if (width > maxDimension || height > maxDimension) {
+            if (width > height) {
+              height = Math.round((height * maxDimension) / width);
+              width = maxDimension;
+            } else {
+              width = Math.round((width * maxDimension) / height);
+              height = maxDimension;
+            }
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+          const base64 = compressedDataUrl.split(',')[1];
+          resolve({
+            base64Image: base64,
+            mimeType: 'image/jpeg',
+          });
+        } catch {
+          const fallbackBase64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
+          resolve({
+            base64Image: fallbackBase64,
+            mimeType: file.type || 'image/png',
+          });
+        }
+      };
+      img.onerror = () => {
+        const fallbackBase64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
+        resolve({
+          base64Image: fallbackBase64,
+          mimeType: file.type || 'image/png',
+        });
+      };
+      img.src = dataUrl;
     };
     reader.onerror = () => reject(new Error('No se pudo leer el archivo de imagen.'));
     reader.readAsDataURL(file);
   });
 }
+
+export const fileToBase64 = compressImageToBase64;
 
 /**
  * Normaliza y filtra únicamente el arreglo de objetos con `{ titulo, dia_semana, hora_inicio, hora_fin }`.
@@ -91,14 +134,21 @@ export function parseRawGeminiScheduleText(rawText) {
 }
 
 /**
- * Consulta dinámicamente ModelService.ListModels para obtener los modelos activos en la cuenta.
+ * Consulta dinámicamente ModelService.ListModels para obtener los modelos activos en la cuenta
+ * y los guarda en caché en memoria para acelerar análisis posteriores.
  */
-async function fetchAvailableModelsFromApi(apiKey) {
+export async function getCandidateGeminiModels(apiKey) {
+  if (cachedDiscoveredModels && cachedDiscoveredModels.length > 0) {
+    return lastWorkingModel
+      ? Array.from(new Set([lastWorkingModel, ...cachedDiscoveredModels]))
+      : cachedDiscoveredModels;
+  }
+
   try {
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
     );
-    if (!res.ok) return [];
+    if (!res.ok) return FALLBACK_VISION_MODELS;
     const data = await res.json();
     const models = (data?.models || [])
       .filter(
@@ -112,22 +162,34 @@ async function fetchAvailableModelsFromApi(apiKey) {
       .map((m) => String(m.name || '').replace(/^models\//, ''))
       .filter(Boolean);
 
-    // Priorizar modelos flash activos (ej. gemini-2.5-flash, gemini-3.8-flash)
-    return models.sort((a, b) => {
+    const sorted = models.sort((a, b) => {
       const aFlash = a.includes('flash') && !a.includes('8b') && !a.includes('lite') ? 0 : 1;
       const bFlash = b.includes('flash') && !b.includes('8b') && !b.includes('lite') ? 0 : 1;
       if (aFlash !== bFlash) return aFlash - bFlash;
       return b.localeCompare(a);
     });
+
+    cachedDiscoveredModels =
+      sorted.length > 0
+        ? Array.from(new Set([...sorted, ...FALLBACK_VISION_MODELS]))
+        : FALLBACK_VISION_MODELS;
+
+    return lastWorkingModel
+      ? Array.from(new Set([lastWorkingModel, ...cachedDiscoveredModels]))
+      : cachedDiscoveredModels;
   } catch {
-    return [];
+    return FALLBACK_VISION_MODELS;
   }
 }
 
+export function markWorkingGeminiModel(modelName) {
+  lastWorkingModel = modelName;
+}
+
 /**
- * Llama al endpoint oficial de Google AI Studio (Gemini API).
+ * Obtiene la API key configurada en el entorno.
  */
-async function callGoogleAIStudio(base64Image, mimeType) {
+export function resolveGeminiApiKey() {
   const metaEnv = (typeof import.meta !== 'undefined' && import.meta.env) || {};
   const rawKey =
     metaEnv.VITE_GEMINI_API_KEY ||
@@ -137,18 +199,21 @@ async function callGoogleAIStudio(base64Image, mimeType) {
 
   const apiKey = normalizeApiKey(rawKey);
 
-  // IMPORTANTE: Solo bloquear si está vacía o tiene el texto placeholder literal "MY_GEMINI_API_KEY"
   if (!apiKey || apiKey === 'MY_GEMINI_API_KEY') {
     throw new Error(
       'Configura tu clave GEMINI_API_KEY de Google AI Studio en el archivo .env.local'
     );
   }
 
-  const discovered = await fetchAvailableModelsFromApi(apiKey);
-  const candidateModels =
-    discovered.length > 0
-      ? Array.from(new Set([...discovered, ...FALLBACK_VISION_MODELS]))
-      : FALLBACK_VISION_MODELS;
+  return apiKey;
+}
+
+/**
+ * Llama al endpoint oficial de Google AI Studio (Gemini API) con caché de modelo activo.
+ */
+export async function callGeminiVisionWithPrompt(promptText, base64Image, mimeType) {
+  const apiKey = resolveGeminiApiKey();
+  const candidateModels = await getCandidateGeminiModels(apiKey);
 
   let firstMeaningfulError = null;
 
@@ -163,7 +228,7 @@ async function callGoogleAIStudio(base64Image, mimeType) {
           contents: [
             {
               parts: [
-                { text: SCHEDULE_PROMPT },
+                { text: promptText },
                 {
                   inlineData: {
                     mimeType: mimeType,
@@ -175,6 +240,7 @@ async function callGoogleAIStudio(base64Image, mimeType) {
           ],
           generationConfig: {
             responseMimeType: 'application/json',
+            temperature: 0.1,
           },
         }),
       });
@@ -183,14 +249,7 @@ async function callGoogleAIStudio(base64Image, mimeType) {
       if (!response.ok) {
         const errMsg =
           data?.error?.message || `Error HTTP ${response.status} al consultar ${modelName}.`;
-        const isModelNotFound =
-          response.status === 404 ||
-          errMsg.includes('not found') ||
-          errMsg.includes('no longer available');
-
-        if (!isModelNotFound && !firstMeaningfulError) {
-          firstMeaningfulError = new Error(errMsg);
-        } else if (!firstMeaningfulError) {
+        if (!firstMeaningfulError) {
           firstMeaningfulError = new Error(errMsg);
         }
         continue;
@@ -202,7 +261,8 @@ async function callGoogleAIStudio(base64Image, mimeType) {
         throw new Error(`El modelo ${modelName} no devolvió texto.`);
       }
 
-      return parseRawGeminiScheduleText(rawText);
+      markWorkingGeminiModel(modelName);
+      return rawText;
     } catch (err) {
       if (!firstMeaningfulError) {
         firstMeaningfulError = err;
@@ -213,12 +273,24 @@ async function callGoogleAIStudio(base64Image, mimeType) {
   throw firstMeaningfulError || new Error('No se pudo analizar la imagen con Gemini AI.');
 }
 
+async function callGoogleAIStudio(base64Image, mimeType) {
+  const rawText = await callGeminiVisionWithPrompt(SCHEDULE_PROMPT, base64Image, mimeType);
+  return parseRawGeminiScheduleText(rawText);
+}
+
 /**
- * Analiza una imagen de horario intentando primero la Serverless Function `/api/parse-schedule`
- * y usando como fallback directo el endpoint REST oficial de Google AI Studio en entorno local.
+ * Analiza una imagen de horario usando compresión en canvas (1280px JPEG 0.8)
+ * y conexión directa optimizada con Google AI Studio.
  */
 export async function analyzeScheduleImage(file) {
-  const { base64Image, mimeType } = await fileToBase64(file);
+  const { base64Image, mimeType } = await compressImageToBase64(file, 1280, 0.8);
+
+  const isLocalDev =
+    typeof import.meta !== 'undefined' && Boolean(import.meta.env?.DEV);
+
+  if (isLocalDev) {
+    return await callGoogleAIStudio(base64Image, mimeType);
+  }
 
   try {
     const response = await fetch('/api/parse-schedule', {

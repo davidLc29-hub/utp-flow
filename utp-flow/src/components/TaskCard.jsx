@@ -5,7 +5,8 @@ import { formatDate, formatReminderSquareText } from '../utils/formatDate';
 
 /**
  * Tarjeta presentacional de una tarea individual.
- * Soporta insignia de urgencia (`task.urgente`), indicador de excepción de cruce y tema dinámico.
+ * Soporta insignia de urgencia (`task.urgente`), descripción opcional (`task.descripcion`),
+ * indicador de excepción de cruce y tema dinámico.
  */
 export function TaskCard({ task, onToggle, onEdit, onDelete }) {
   const { currentTheme } = useAmbit();
@@ -18,8 +19,8 @@ export function TaskCard({ task, onToggle, onEdit, onDelete }) {
   const borderLeftClass = isCompleted
     ? 'opacity-60 border-l-transparent'
     : isUrgent
-    ? 'border-l-amber-500 ring-1 ring-amber-200/80'
-    : currentTheme.borderLeft;
+      ? 'border-l-amber-500 ring-1 ring-amber-200/80'
+      : currentTheme.borderLeft;
 
   return (
     <div
@@ -74,6 +75,16 @@ export function TaskCard({ task, onToggle, onEdit, onDelete }) {
               </span>
             )}
           </div>
+
+          {task.descripcion && (
+            <p
+              className={`mt-1 text-xs sm:text-sm leading-relaxed break-words ${
+                isCompleted ? 'text-gray-400 line-through' : 'text-gray-500'
+              }`}
+            >
+              {task.descripcion}
+            </p>
+          )}
 
           {(dueDate || scheduledTime) && (
             <div className="flex flex-wrap items-center gap-2 mt-1.5">

@@ -90,6 +90,7 @@ export function normalizeTaskRecord(raw, fallbackUserId = DEFAULT_LOCAL_USER_ID)
     id_usuario: raw.id_usuario || fallbackUserId,
     id_entorno: validAmbit,
     titulo: String(raw.titulo !== undefined ? raw.titulo : raw.title || '').trim(),
+    descripcion: String(raw.descripcion !== undefined ? raw.descripcion : raw.description || '').trim(),
     fecha_programada:
       raw.fecha_programada !== undefined ? raw.fecha_programada : raw.date || null,
     hora_programada:
