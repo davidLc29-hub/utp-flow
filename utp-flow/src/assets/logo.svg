@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
+    <defs>
+        <!-- Sombra paralela para darle profundidad como un icono de app -->
+        <filter id="sombra" x="-20%" y="-20%" width="140%" height="140%">
+            <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#002244" flood-opacity="0.15" />
+        </filter>
+        
+        <!-- Máscara de recorte para los bordes redondeados del contenedor principal -->
+        <clipPath id="bordes-redondeados">
+            <rect x="10" y="10" width="100" height="100" rx="22" ry="22" />
+        </clipPath>
+    </defs>
+
+    <!-- Base blanca con la sombra -->
+    <rect x="10" y="10" width="100" height="100" rx="22" ry="22" fill="#ffffff" filter="url(#sombra)" />
+
+    <!-- Cuadrantes coloreados usando la máscara de recorte -->
+    <g clip-path="url(#bordes-redondeados)">
+        <!-- Superior Izquierdo: Rojo -->
+        <rect x="10" y="10" width="50" height="50" fill="#e60000" />
+        <!-- Superior Derecho: Blanco -->
+        <rect x="60" y="10" width="50" height="50" fill="#ffffff" />
+        <!-- Inferior Izquierdo: Negro -->
+        <rect x="10" y="60" width="50" height="50" fill="#000000" />
+        <!-- Inferior Derecho: Rojo -->
+        <rect x="60" y="60" width="50" height="50" fill="#e60000" />
+    </g>
+
+    <!-- Estrella en el cuadrante superior derecho (Color Negro) -->
+    <g fill="#000000">
+        <!-- Forma principal de la estrella/destello -->
+        <path d="M 85 20
+                 C 85 30, 90 35, 100 35
+                 C 90 35, 85 40, 85 50
+                 C 85 40, 80 35, 70 35
+                 C 80 35, 85 30, 85 20 Z" />
+        
+        <!-- Pequeños círculos/destellos flotantes -->
+        <circle cx="97" cy="23" r="3.5" />
+        <circle cx="73" cy="47" r="3.5" />
+    </g>
+</svg>
+
