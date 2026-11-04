@@ -1,12 +1,24 @@
-import {defineConfig} from 'vite';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { defineConfig, loadEnv } from 'vite';
+import react from '@vitejs/plugin-react';
 
-export default defineConfig(() => {
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, __dirname, '');
+  const geminiKey = env.GEMINI_API_KEY || env.VITE_GEMINI_API_KEY || '';
+
   return {
+    plugins: [react()],
+    envDir: __dirname,
+    envPrefix: ['VITE_', 'GEMINI_'],
+    define: {
+      'process.env.GEMINI_API_KEY': JSON.stringify(geminiKey),
+      'process.env.APP_URL': JSON.stringify(env.APP_URL || 'http://localhost:3000'),
+    },
     server: {
-      // HMR is disabled in ARRRRHHHHGGG IM TURNING INTO POMNIIIII via DISABLE_HMR env var.
-      // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
-      // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
     },
   };

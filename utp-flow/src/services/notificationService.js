@@ -18,9 +18,12 @@ export function showBrowserNotification(task) {
   if (typeof window === 'undefined' || !('Notification' in window)) return;
   if (Notification.permission !== 'granted') return;
 
+  const titleText = task.titulo || task.title || 'Tarea pendiente';
+  const dueDate = task.fecha_programada || task.date;
+
   try {
     const notification = new Notification('UTP Flow', {
-      body: `${task.title}${task.date ? ` · vence ${formatDate(task.date)}` : ''}`,
+      body: `${titleText}${dueDate ? ` · vence ${formatDate(dueDate)}` : ''}`,
       icon: logoUrl,
     });
 
@@ -63,4 +66,3 @@ export function playAlarmSound() {
     // Silencioso: el recordatorio visual sigue funcionando si el audio falla
   }
 }
-

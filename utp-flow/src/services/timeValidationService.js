@@ -1,27 +1,49 @@
 /**
- * Servicio puro de validación de tiempos y detección de conflictos de horario.
- * No tiene dependencias de React ni del DOM.
+ * Servicio puro de validación de tiempos y detección de conflictos de horario (Sprint 2).
+ * Sin dependencias de React ni del DOM.
  */
 
+export const DAYS_OF_WEEK = [
+  { value: 1, label: 'Lunes', short: 'Lun' },
+  { value: 2, label: 'Martes', short: 'Mar' },
+  { value: 3, label: 'Miércoles', short: 'Mié' },
+  { value: 4, label: 'Jueves', short: 'Jue' },
+  { value: 5, label: 'Viernes', short: 'Vie' },
+  { value: 6, label: 'Sábado', short: 'Sáb' },
+  { value: 7, label: 'Domingo', short: 'Dom' },
+];
+
+export function getDayName(dayNumber) {
+  const found = DAYS_OF_WEEK.find((d) => d.value === Number(dayNumber));
+  return found ? found.label : 'Día';
+}
+
 /**
- * Convierte una hora en formato "HH:mm" a minutos desde las 00:00.
+ * Convierte una fecha JS al día de la semana ISO (1 = Lunes ... 7 = Domingo).
  */
-export function timeStringToMinutes(timeStr) {
-  if (!timeStr || typeof timeStr !== 'string') return NaN;
-  const [hours, minutes] = timeStr.split(':').map(Number);
-  if (Number.isNaN(hours) || Number.isNaN(minutes)) return NaN;
-  return hours * 60 + minutes;
+export function getIsoDayOfWeek(dateObj) {
+  const jsDay = dateObj.getDay(); // 0 (Dom) a 6 (Sáb)
+  return jsDay === 0 ? 7 : jsDay;
+}
+
+/**
+ * Extrae la hora en formato 24h "HH:MM" de un objeto Date.
+ */
+export function extractTimeHHMM(dateObj) {
+  const hours = String(dateObj.getHours()).padStart(2, '0');
+  const minutes = String(dateObj.getMinutes()).padStart(2, '0');
+  return `${hours}:${minutes}`;
 }
 
 /**
  * Valida que la fecha/hora de un recordatorio esté en el futuro.
  */
-export function validateFutureReminder(reminderAt, nowMs = Date.now()) {
-  if (!reminderAt) {
+export function validateFutureReminder(horaProgramada, nowMs = Date.now()) {
+  if (!horaProgramada) {
     return { valid: true };
   }
 
-  const reminderTime = new Date(reminderAt).getTime();
+  const reminderTime = new Date(horaProgramada).getTime();
   if (Number.isNaN(reminderTime) || reminderTime <= nowMs) {
     return {
       valid: false,
@@ -33,71 +55,48 @@ export function validateFutureReminder(reminderAt, nowMs = Date.now()) {
 }
 
 /**
- * Detecta si una fecha/hora programada (`reminderAt`) se cruza con algún bloque fijo
- * de horario (clases o trabajo) o con otra tarea activa.
+ * Detecta si la fecha y hora programada de una tarea (`horaProgramada`) se cruza
+ * con algún bloque registrado en la tabla `horarios` de Dexie para ese mismo día de la semana:
+ * `hora_tarea >= bloque.hora_inicio && hora_tarea < bloque.hora_fin`
  *
- * @param {string} reminderAt Fecha/hora ISO o datetime-local de la tarea.
- * @param {Array} fixedSchedules Lista de bloques fijos `{ id, dayOfWeek, startTime, endTime, context, label }`.
- * @param {Array} existingTasks Lista de tareas existentes para detectar colisión directa de hora.
- * @param {string|null} ignoreTaskId ID de la tarea en edición para excluirla de la comparación.
+ * @param {string} horaProgramada Cadena ISO / datetime-local (YYYY-MM-DDTHH:mm)
+ * @param {Array} fixedSchedules Registros de la tabla `horarios`
  * @returns {{ hasConflict: boolean, conflict: object | null }}
  */
-export function detectScheduleConflict(
-  reminderAt,
-  fixedSchedules = [],
-  existingTasks = [],
-  ignoreTaskId = null
-) {
-  if (!reminderAt) {
+export function detectScheduleConflict(horaProgramada, fixedSchedules = []) {
+  if (!horaProgramada) {
     return { hasConflict: false, conflict: null };
   }
 
-  const targetDate = new Date(reminderAt);
+  const targetDate = new Date(horaProgramada);
   if (Number.isNaN(targetDate.getTime())) {
     return { hasConflict: false, conflict: null };
   }
 
-  const dayOfWeek = targetDate.getDay(); // 0 (Dom) - 6 (Sáb)
-  const targetMinutes = targetDate.getHours() * 60 + targetDate.getMinutes();
+  const diaSemana = getIsoDayOfWeek(targetDate); // 1 (Lunes) a 7 (Domingo)
+  const horaTarea = extractTimeHHMM(targetDate); // "HH:MM"
 
-  // 1. Cruce contra bloques de horario fijo (Universidad / Trabajo)
-  for (const block of fixedSchedules) {
-    if (Number(block.dayOfWeek) !== dayOfWeek) continue;
+  for (const bloque of fixedSchedules) {
+    if (!bloque) continue;
+    const bloqueDia = Number(bloque.dia_semana);
+    if (bloqueDia !== diaSemana) continue;
 
-    const startMin = timeStringToMinutes(block.startTime);
-    const endMin = timeStringToMinutes(block.endTime);
-    if (Number.isNaN(startMin) || Number.isNaN(endMin)) continue;
+    const horaInicio = String(bloque.hora_inicio || '').slice(0, 5);
+    const horaFin = String(bloque.hora_fin || '').slice(0, 5);
+    if (!horaInicio || !horaFin) continue;
 
-    if (targetMinutes >= startMin && targetMinutes < endMin) {
+    if (horaTarea >= horaInicio && horaTarea < horaFin) {
       return {
         hasConflict: true,
         conflict: {
-          type: 'fixed_schedule',
-          label: block.label || (block.context === 'uni' ? 'Clase universitaria' : 'Jornada laboral'),
-          context: block.context,
-          startTime: block.startTime,
-          endTime: block.endTime,
-        },
-      };
-    }
-  }
-
-  // 2. Cruce contra otra tarea pendiente programada en una ventana menor a 30 minutos
-  for (const task of existingTasks) {
-    if (!task || task.completed || !task.reminderAt || task.id === ignoreTaskId) continue;
-
-    const otherDate = new Date(task.reminderAt);
-    if (Number.isNaN(otherDate.getTime())) continue;
-
-    const diffMinutes = Math.abs(targetDate.getTime() - otherDate.getTime()) / (60 * 1000);
-    if (diffMinutes < 30) {
-      return {
-        hasConflict: true,
-        conflict: {
-          type: 'task_overlap',
-          label: task.title,
-          context: task.context,
-          reminderAt: task.reminderAt,
+          id: bloque.id,
+          titulo: bloque.titulo || 'Bloque de horario fijo',
+          id_entorno: bloque.id_entorno || 'uni',
+          dia_semana: bloqueDia,
+          dia_nombre: getDayName(bloqueDia),
+          hora_inicio: horaInicio,
+          hora_fin: horaFin,
+          hora_intentada: horaTarea,
         },
       };
     }
@@ -105,4 +104,3 @@ export function detectScheduleConflict(
 
   return { hasConflict: false, conflict: null };
 }
-

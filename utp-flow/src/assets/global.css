@@ -4,17 +4,19 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Ocultar scrollbar para un look más limpio en listas */
-::-webkit-scrollbar {
+/* Ocultar scrollbar para un look más limpio en listas y barras de pestañas */
+::-webkit-scrollbar,
+.no-scrollbar::-webkit-scrollbar {
   display: none;
 }
 
-* {
+*,
+.no-scrollbar {
   scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 /* Transiciones suaves de color y fondo */
 .color-transition {
   transition: background-color 0.3s, color 0.3s, border-color 0.3s;
 }
-

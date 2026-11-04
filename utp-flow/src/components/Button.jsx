@@ -1,9 +1,8 @@
 import React from 'react';
-import { useBimodal } from '../context/BimodalContext';
+import { useAmbit } from '../context/AmbitContext';
 
 /**
- * Componente Button reutilizable y aislado con soporte para variantes bimodales,
- * secundarias y botón de acción flotante (FAB).
+ * Componente Button reutilizable conectado al diccionario estático de temas (AMBIT_THEMES).
  */
 export function Button({
   children,
@@ -15,7 +14,7 @@ export function Button({
   ariaLabel,
   id,
 }) {
-  const { theme } = useBimodal();
+  const { currentTheme } = useAmbit();
 
   if (variant === 'fab') {
     return (
@@ -25,7 +24,7 @@ export function Button({
         onClick={onClick}
         disabled={disabled}
         aria-label={ariaLabel}
-        className={`fixed bottom-6 right-6 sm:bottom-10 sm:right-10 w-16 h-16 sm:w-20 sm:h-20 rounded-full text-white flex items-center justify-center active:scale-90 transition-all color-transition z-20 hover:scale-105 ${theme.fabShadowClass} ${theme.bgClass} ${className}`}
+        className={`fixed bottom-6 right-6 sm:bottom-10 sm:right-10 w-16 h-16 sm:w-20 sm:h-20 rounded-full text-white flex items-center justify-center active:scale-90 transition-all color-transition z-20 hover:scale-105 ${currentTheme.shadowFab} ${currentTheme.bgPrimary} ${currentTheme.bgHover} ${className}`}
       >
         {children}
       </button>
@@ -40,7 +39,7 @@ export function Button({
         onClick={onClick}
         disabled={disabled}
         aria-label={ariaLabel}
-        className={`py-3.5 bg-gray-100 active:bg-gray-200 text-gray-600 font-bold rounded-xl transition-colors ${className}`}
+        className={`py-3.5 px-4 bg-gray-100 hover:bg-gray-200 active:bg-gray-200 text-gray-700 font-bold rounded-xl transition-colors ${className}`}
       >
         {children}
       </button>
@@ -54,10 +53,9 @@ export function Button({
       onClick={onClick}
       disabled={disabled}
       aria-label={ariaLabel}
-      className={`py-3.5 text-white font-bold rounded-xl transition-all color-transition active:opacity-80 ${theme.bgClass} ${className}`}
+      className={`py-3.5 px-4 text-white font-bold rounded-xl transition-all color-transition active:opacity-80 ${currentTheme.bgPrimary} ${currentTheme.bgHover} ${className}`}
     >
       {children}
     </button>
   );
 }
-
